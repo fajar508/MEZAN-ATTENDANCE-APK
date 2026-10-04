@@ -1,14 +1,14 @@
 name: MEZAN Attendance APK Build
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -17,66 +17,130 @@ jobs:
       - name: Prepare build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip
+          sudo apt-get install -y unzip wget
 
-      - name: Extract MEZAN APK Builder ZIP
+      - name: Find APK Builder ZIP
+        id: find_zip
+        shell: bash
         run: |
-          ZIP_FILE="$(find . -maxdepth 2 -type f -name 'MEZAN_ATTENDANCE_FREE_APK_BUILDER_V3.zip' | head -n 1)"
+          ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*.zip' | head -n 1)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: MEZAN_ATTENDANCE_FREE_APK_BUILDER_V3.zip not found."
+            echo "ERROR: No ZIP file found in repository."
             exit 1
           fi
 
+          echo "ZIP found: $ZIP_FILE"
+          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract APK Builder ZIP
+        run: |
+          rm -rf build_source
           mkdir -p build_source
-          unzip -q "$ZIP_FILE" -d build_source
+
+          unzip -q "${{ steps.find_zip.outputs.zip_file }}" -d build_source
+
+          echo "===== Extracted files ====="
+          find build_source -maxdepth 5 -type f | sort
 
       - name: Locate Android project
+        id: locate
+        shell: bash
         run: |
-          GRADLEW="$(find build_source -type f -name 'gradlew' | head -n 1)"
+          PROJECT_DIR="$(find build_source -type f -name 'settings.gradle' -o -name 'settings.gradle.kts' | head -n 1 | xargs -r dirname)"
 
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: Android Gradle project / gradlew was not found inside the ZIP."
-            echo "The ZIP may not contain a native Android project."
-            echo ""
+          if [ -z "$PROJECT_DIR" ]; then
+            PROJECT_DIR="$(find build_source -type f -name 'build.gradle' -o -name 'build.gradle.kts' | head -n 1 | xargs -r dirname)"
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Android Gradle project could not be found."
             echo "Files found:"
-            find build_source -maxdepth 4 -type f | head -100
+            find build_source -maxdepth 6 -type f | sort
             exit 1
           fi
 
-          PROJECT_DIR="$(dirname "$GRADLEW")"
+          echo "Android project found at: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+      - name: Generate Gradle Wrapper
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        shell: bash
+        run: |
+          echo "===== Android project ====="
+          ls -la
 
-          chmod +x "$GRADLEW"
+          echo "===== Checking Gradle files ====="
+          find . -maxdepth 3 -type f \( \
+            -name 'build.gradle' -o \
+            -name 'build.gradle.kts' -o \
+            -name 'settings.gradle' -o \
+            -name 'settings.gradle.kts' \
+          \) -print
 
-          echo "Android project found at:"
-          echo "$PROJECT_DIR"
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "Existing Gradle Wrapper found."
+          else
+            echo "No Gradle Wrapper found."
+            echo "Downloading Gradle 8.10.2..."
+
+            cd "$RUNNER_TEMP"
+
+            wget -q \
+              https://services.gradle.org/distributions/gradle-8.10.2-bin.zip \
+              -O gradle.zip
+
+            unzip -q gradle.zip
+
+            export PATH="$RUNNER_TEMP/gradle-8.10.2/bin:$PATH"
+
+            cd "$GITHUB_WORKSPACE/${{ steps.locate.outputs.project_dir }}"
+
+            gradle wrapper --gradle-version 8.10.2
+
+            chmod +x ./gradlew
+          fi
+
+          echo "===== Wrapper version ====="
+          ./gradlew --version
 
       - name: Build Debug APK
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        shell: bash
         run: |
-          ./gradlew assembleDebug --stacktrace
+          chmod +x ./gradlew
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            assembleDebug
 
       - name: Find APK
+        id: apk
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        shell: bash
         run: |
-          mkdir -p final-apk
+          APK_FILE="$(find . -type f -name '*.apk' | head -n 1)"
 
-          APK="$(find "$PROJECT_DIR" -type f -name '*.apk' | head -n 1)"
-
-          if [ -z "$APK" ]; then
+          if [ -z "$APK_FILE" ]; then
             echo "ERROR: APK was not generated."
+            find . -type f | sort
             exit 1
           fi
 
-          echo "APK generated:"
-          echo "$APK"
+          echo "APK found: $APK_FILE"
+          echo "apk_file=$APK_FILE" >> "$GITHUB_OUTPUT"
 
-          cp "$APK" final-apk/MEZAN_ATTENDANCE.apk
+      - name: Rename APK
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        run: |
+          cp "${{ steps.apk.outputs.apk_file }}" \
+             "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk"
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MEZAN-ATTENDANCE-APK
-          path: final-apk/MEZAN_ATTENDANCE.apk
+          path: MEZAN_ATTENDANCE_DEBUG.apk
           if-no-files-found: error

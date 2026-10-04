@@ -1,0 +1,82 @@
+name: MEZAN Attendance APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+      - name: Extract MEZAN APK Builder ZIP
+        run: |
+          ZIP_FILE="$(find . -maxdepth 2 -type f -name 'MEZAN_ATTENDANCE_FREE_APK_BUILDER_V3.zip' | head -n 1)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: MEZAN_ATTENDANCE_FREE_APK_BUILDER_V3.zip not found."
+            exit 1
+          fi
+
+          mkdir -p build_source
+          unzip -q "$ZIP_FILE" -d build_source
+
+      - name: Locate Android project
+        run: |
+          GRADLEW="$(find build_source -type f -name 'gradlew' | head -n 1)"
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: Android Gradle project / gradlew was not found inside the ZIP."
+            echo "The ZIP may not contain a native Android project."
+            echo ""
+            echo "Files found:"
+            find build_source -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$GRADLEW")"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          chmod +x "$GRADLEW"
+
+          echo "Android project found at:"
+          echo "$PROJECT_DIR"
+
+      - name: Build Debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          mkdir -p final-apk
+
+          APK="$(find "$PROJECT_DIR" -type f -name '*.apk' | head -n 1)"
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK generated:"
+          echo "$APK"
+
+          cp "$APK" final-apk/MEZAN_ATTENDANCE.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEZAN-ATTENDANCE-APK
+          path: final-apk/MEZAN_ATTENDANCE.apk
+          if-no-files-found: error

@@ -21,10 +21,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-          - name: Install Gradle
+      - name: Install Gradle
         shell: bash
         run: |
           set -e
+
           wget -q https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle-8.10.2-bin.zip -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.10.2/bin" >> "$GITHUB_PATH"
@@ -35,14 +36,16 @@ jobs:
         run: |
           set -e
 
-          ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)"
+          ZIP_FILE="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name '*.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: Android project ZIP not found."
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
+          echo "Found ZIP:"
+          echo "$ZIP_FILE"
+
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Extract Android project
@@ -50,13 +53,13 @@ jobs:
         run: |
           set -e
 
-          rm -rf build_source
-          mkdir -p build_source
+          rm -rf "$GITHUB_WORKSPACE/build_source"
+          mkdir -p "$GITHUB_WORKSPACE/build_source"
 
-          unzip -q "${{ steps.find_zip.outputs.zip_file }}" -d build_source
+          unzip -q "${{ steps.find_zip.outputs.zip_file }}" \
+            -d "$GITHUB_WORKSPACE/build_source"
 
-          echo "Extracted files:"
-          find build_source -maxdepth 4 -type f | sort
+          echo "Android project extracted."
 
       - name: Locate Android project
         id: locate
@@ -64,21 +67,32 @@ jobs:
         run: |
           set -e
 
-          SETTINGS_FILE="$(find build_source -type f \( \
-            -name 'settings.gradle' \
-            -o \
-            -name 'settings.gradle.kts' \
-          \) -print -quit)"
+          SETTINGS_FILE="$(
+            find "$GITHUB_WORKSPACE/build_source" \
+              -type f \
+              \( \
+                -name 'settings.gradle' \
+                -o \
+                -name 'settings.gradle.kts' \
+              \) \
+              -print -quit
+          )"
 
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "ERROR: settings.gradle not found."
-            find build_source -maxdepth 6 -type f | sort
+            echo "ERROR: settings.gradle was not found."
+
+            echo "Extracted files:"
+            find "$GITHUB_WORKSPACE/build_source" \
+              -maxdepth 6 \
+              -type f \
+              | sort
+
             exit 1
           fi
 
           PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
 
-          echo "Android project found at:"
+          echo "Android project found:"
           echo "$PROJECT_DIR"
 
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
@@ -93,18 +107,35 @@ jobs:
           pwd
 
           echo ""
-          echo "Project files:"
+          echo "Project contents:"
           ls -la
 
           echo ""
-          echo "Checking Gradle files..."
+          echo "Checking Gradle project..."
 
-          test -f settings.gradle || test -f settings.gradle.kts
-          test -f build.gradle || test -f build.gradle.kts
-          test -f app/build.gradle || test -f app/build.gradle.kts
+          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+            echo "ERROR: settings.gradle not found."
+            exit 1
+          fi
+
+          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+            echo "ERROR: build.gradle not found."
+            exit 1
+          fi
+
+          if [ ! -d "app" ]; then
+            echo "ERROR: app directory not found."
+            exit 1
+          fi
 
           echo ""
           echo "Android project verified successfully."
+
+      - name: Show Gradle version
+        shell: bash
+        run: |
+          set -e
+          gradle --version
 
       - name: Build Debug APK
         working-directory: ${{ steps.locate.outputs.project_dir }}
@@ -125,10 +156,23 @@ jobs:
         run: |
           set -e
 
-          APK_FILE="$(find app/build/outputs/apk/debug -type f -name '*.apk' -print -quit)"
+          APK_FILE="$(
+            find app/build/outputs/apk/debug \
+              -type f \
+              -name '*.apk' \
+              -print -quit
+          )"
 
           if [ -z "$APK_FILE" ]; then
             echo "ERROR: Debug APK was not generated."
+
+            echo "Available build output:"
+            find app/build/outputs \
+              -maxdepth 6 \
+              -type f \
+              2>/dev/null \
+              | sort || true
+
             exit 1
           fi
 
@@ -146,16 +190,20 @@ jobs:
           cp "${{ steps.apk.outputs.apk_file }}" \
             "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk"
 
+          echo "Final APK:"
           ls -lh "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk"
 
-      - name: Verify final APK
+      - name: Verify APK
         shell: bash
         run: |
           set -e
 
-          test -f "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk"
+          if [ ! -f "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk" ]; then
+            echo "ERROR: Final APK file does not exist."
+            exit 1
+          fi
 
-          echo "Final APK verified:"
+          echo "APK verification successful."
           ls -lh "$GITHUB_WORKSPACE/MEZAN_ATTENDANCE_DEBUG.apk"
 
       - name: Upload APK Artifact

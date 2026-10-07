@@ -11,241 +11,153 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Gradle
-        shell: bash
-        run: |
-          set -e
-
-          GRADLE_VERSION="8.10.2"
-
-          curl -fsSL -o "$RUNNER_TEMP/gradle.zip" \
-            "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-
-          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
-
-          echo "$RUNNER_TEMP/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
-
-          gradle --version
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
 
       - name: Find Android project ZIP
-        id: find_zip
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE="$(find . -maxdepth 2 -type f -iname '*.zip' -print -quit)"
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No Android project ZIP file was found."
+            echo "ERROR: Android project ZIP not found."
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
-          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
+          echo "Android project ZIP found:"
+          echo "$ZIP_FILE"
+
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract Android project
         shell: bash
         run: |
           set -e
 
-          rm -rf "$GITHUB_WORKSPACE/build_source"
+          rm -rf build_source
+          mkdir -p build_source
 
-          mkdir -p "$GITHUB_WORKSPACE/build_source"
+          unzip -q "$ZIP_FILE" -d build_source
 
-          unzip -q \
-            "${{ steps.find_zip.outputs.zip_file }}" \
-            -d "$GITHUB_WORKSPACE/build_source"
-
-          echo "Android project extracted successfully."
-
-          echo "Searching extracted files..."
-
-          find "$GITHUB_WORKSPACE/build_source" \
-            -maxdepth 5 \
-            -type f \
-            | sort \
-            | head -200
+          echo "Extracted Android project files:"
+          find build_source -maxdepth 3 -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "build.gradle" \) \
+            | head -30
 
       - name: Locate Android project
-        id: locate
         shell: bash
         run: |
           set -e
 
-          SETTINGS_FILE=""
-
-          while IFS= read -r file; do
-            case "$file" in
-              */settings.gradle|*/settings.gradle.kts|*/settings.gradle.dcl)
-                SETTINGS_FILE="$file"
-                break
-                ;;
-            esac
-          done < <(
-            find "$GITHUB_WORKSPACE/build_source" \
-              -type f \
-              \( \
-                -name 'settings.gradle' \
-                -o -name 'settings.gradle.kts' \
-                -o -name 'settings.gradle.dcl' \
-              \) \
-              -print
-          )
+          SETTINGS_FILE=$(find build_source \
+            -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -not -path "*/gradle-*/*" \
+            | head -n 1)
 
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "ERROR: No Gradle settings file was found."
-
-            echo "Searching for Gradle build files..."
-
-            find "$GITHUB_WORKSPACE/build_source" \
-              -type f \
-              \( \
-                -name 'build.gradle' \
-                -o -name 'build.gradle.kts' \
-              \) \
-              -print \
-              | head -100
-
+            echo "ERROR: settings.gradle not found."
             exit 1
           fi
 
-          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
 
-          echo "Gradle settings file:"
-          echo "$SETTINGS_FILE"
-
-          echo "Android project directory:"
+          echo "Android project found at:"
           echo "$PROJECT_DIR"
 
-          if [ ! -f "$PROJECT_DIR/build.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/build.gradle.kts" ] && \
-             [ ! -f "$PROJECT_DIR/build.gradle.dcl" ]; then
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-            echo "ERROR: Gradle settings file found but root build file is missing."
+      - name: Verify Android project
+        shell: bash
+        run: |
+          set -e
 
-            echo "Project directory:"
-            echo "$PROJECT_DIR"
-
-            ls -la "$PROJECT_DIR"
-
+          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
+            echo "ERROR: Gradle settings file not found."
             exit 1
           fi
 
-          echo "Android project found successfully."
-
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Verify Android project
-        working-directory: ${{ steps.locate.outputs.project_dir }}
-        shell: bash
-        run: |
-          set -e
-
-          echo "Project directory:"
-          pwd
-
-          echo ""
-          echo "Project files:"
-          ls -la
-
-          echo ""
-
-          if [ -f "./gradlew" ]; then
-            echo "Gradle wrapper found."
-
-            chmod +x ./gradlew
-
-            ./gradlew --version
-          else
-            echo "No Gradle wrapper found."
-
-            gradle --version
+          if [ ! -d "$PROJECT_DIR/app" ]; then
+            echo "ERROR: app directory not found."
+            exit 1
           fi
+
+          echo "Android project verified successfully."
 
       - name: Build Debug APK
-        working-directory: ${{ steps.locate.outputs.project_dir }}
         shell: bash
         run: |
           set -e
 
-          echo "Starting Android APK build..."
+          cd "$PROJECT_DIR"
 
-          if [ -f "./gradlew" ]; then
-
-            chmod +x ./gradlew
-
-            ./gradlew \
-              --no-daemon \
-              --stacktrace \
-              clean \
-              assembleDebug
-
-          else
-
-            gradle \
-              --no-daemon \
-              --stacktrace \
-              clean \
-              assembleDebug
-
-          fi
+          gradle --no-daemon --stacktrace assembleDebug
 
       - name: Find generated APK
-        id: apk
         shell: bash
         run: |
           set -e
 
-          APK_FILE="$(
-            find "${{ steps.locate.outputs.project_dir }}" \
-              -type f \
-              -path '*/build/outputs/apk/debug/*.apk' \
-              -print \
-              -quit
-          )"
+          APK_FILE=$(find "$PROJECT_DIR/app/build/outputs/apk" \
+            -type f \
+            -name "*.apk" \
+            | head -n 1)
 
           if [ -z "$APK_FILE" ]; then
-
-            echo "ERROR: No debug APK was generated."
-
-            echo "Searching for any APK files..."
-
-            find "${{ steps.locate.outputs.project_dir }}" \
-              -type f \
-              -name '*.apk' \
-              -print
-
+            echo "ERROR: APK was not generated."
             exit 1
           fi
 
           echo "APK found:"
           echo "$APK_FILE"
 
-          echo "apk_file=$APK_FILE" >> "$GITHUB_OUTPUT"
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f "$APK_FILE" ]; then
+            echo "ERROR: APK file does not exist."
+            exit 1
+          fi
+
+          APK_SIZE=$(stat -c%s "$APK_FILE")
+
+          echo "APK size: $APK_SIZE bytes"
+
+          if [ "$APK_SIZE" -lt 10000 ]; then
+            echo "WARNING: APK size is unusually small."
+          fi
+
+          file "$APK_FILE"
 
       - name: Copy final APK
         shell: bash
         run: |
           set -e
 
-          mkdir -p "$GITHUB_WORKSPACE/final_apk"
+          mkdir -p final_apk
 
-          cp \
-            "${{ steps.apk.outputs.apk_file }}" \
-            "$GITHUB_WORKSPACE/final_apk/MEZAN-ATTENDANCE.apk"
+          cp "$APK_FILE" final_apk/MEZAN-ATTENDANCE.apk
 
           echo "Final APK:"
-          ls -lh "$GITHUB_WORKSPACE/final_apk/MEZAN-ATTENDANCE.apk"
+          ls -lh final_apk/MEZAN-ATTENDANCE.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -253,3 +165,4 @@ jobs:
           name: MEZAN-ATTENDANCE-APK
           path: final_apk/MEZAN-ATTENDANCE.apk
           if-no-files-found: error
+          retention-days: 30

@@ -91,6 +91,26 @@ jobs:
 
           echo "Android project verified successfully."
 
+      - name: Apply MEZAN MainActivity override
+        shell: bash
+        run: |
+          set -e
+
+          OVERRIDE_FILE="overrides/app/src/main/java/com/mezan/executivetower/attendance/MainActivity.java"
+
+          if [ ! -f "$OVERRIDE_FILE" ]; then
+            echo "ERROR: MainActivity override not found."
+            exit 1
+          fi
+
+          TARGET_DIR="$PROJECT_DIR/app/src/main/java/com/mezan/executivetower/attendance"
+
+          mkdir -p "$TARGET_DIR"
+
+          cp "$OVERRIDE_FILE" "$TARGET_DIR/MainActivity.java"
+
+          echo "MEZAN MainActivity override applied successfully."
+
       - name: Build Debug APK
         shell: bash
         run: |

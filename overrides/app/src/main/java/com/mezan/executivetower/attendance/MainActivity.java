@@ -129,7 +129,7 @@ public class MainActivity extends Activity {
         main.addView(admin);
 
         TextView footer = text(
-                "MEZAN ATTENDANCE APP",
+                "MEZAN ATTENDANCE APP - NATIVE BUILD 14",
                 13,
                 Color.GRAY,
                 true

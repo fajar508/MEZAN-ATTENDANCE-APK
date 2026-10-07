@@ -37,9 +37,7 @@ jobs:
             exit 1
           fi
 
-          echo "Android project ZIP found:"
-          echo "$ZIP_FILE"
-
+          echo "Android project ZIP found: $ZIP_FILE"
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract Android project
@@ -52,10 +50,7 @@ jobs:
 
           unzip -q "$ZIP_FILE" -d build_source
 
-          echo "Extracted Android project files:"
-          find build_source -maxdepth 3 -type f \
-            \( -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "build.gradle" \) \
-            | head -30
+          echo "Android project extracted."
 
       - name: Locate Android project
         shell: bash
@@ -75,9 +70,7 @@ jobs:
 
           PROJECT_DIR=$(dirname "$SETTINGS_FILE")
 
-          echo "Android project found at:"
-          echo "$PROJECT_DIR"
-
+          echo "Android project found at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Verify Android project
@@ -122,9 +115,7 @@ jobs:
             exit 1
           fi
 
-          echo "APK found:"
-          echo "$APK_FILE"
-
+          echo "APK found: $APK_FILE"
           echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
 
       - name: Verify APK
@@ -141,22 +132,19 @@ jobs:
 
           echo "APK size: $APK_SIZE bytes"
 
-          if [ "$APK_SIZE" -lt 10000 ]; then
-            echo "WARNING: APK size is unusually small."
-          fi
-
           file "$APK_FILE"
 
-      - name: Copy final APK
+      - name: Prepare final APK
         shell: bash
         run: |
           set -e
 
+          rm -rf final_apk
           mkdir -p final_apk
 
           cp "$APK_FILE" final_apk/MEZAN-ATTENDANCE.apk
 
-          echo "Final APK:"
+          echo "Final APK prepared:"
           ls -lh final_apk/MEZAN-ATTENDANCE.apk
 
       - name: Upload APK Artifact

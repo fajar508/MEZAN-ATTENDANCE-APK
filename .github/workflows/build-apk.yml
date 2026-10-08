@@ -30,7 +30,7 @@ jobs:
         run: |
           set -e
 
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          ZIP_FILE="./MEZAN_EXECUTIVE_TOWER_ANDROID_APP.zip"
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: Android project ZIP not found."

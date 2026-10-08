@@ -44,23 +44,27 @@ public class MainActivity extends Activity {
     }
 
     private Button menuButton(String title) {
-        Button b = new Button(this);
-        b.setText(title);
-        b.setTextSize(16);
-        b.setTextColor(Color.WHITE);
-        b.setAllCaps(false);
-        b.setBackgroundColor(blue);
+    Button b = new Button(this);
 
-        LinearLayout.LayoutParams p =
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        58
-                );
+    b.setText(title);
+    b.setTextSize(16);
+    b.setTextColor(Color.WHITE);
+    b.setGravity(Gravity.CENTER);
+    b.setAllCaps(false);
+    b.setVisibility(View.VISIBLE);
+    b.setBackgroundColor(blue);
+    b.setPadding(10, 10, 10, 10);
 
-        p.setMargins(20, 8, 20, 8);
-        b.setLayoutParams(p);
+    LinearLayout.LayoutParams p =
+            new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    60
+            );
 
-        return b;
+    p.setMargins(20, 8, 20, 8);
+    b.setLayoutParams(p);
+
+    return b;
     }
 
     private LinearLayout baseLayout() {

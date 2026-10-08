@@ -10,6 +10,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -17,17 +18,23 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
 
-    private int dp(float value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    private int blue = Color.rgb(20, 92, 160);
+    private int dark = Color.rgb(25, 35, 45);
+    private int light = Color.rgb(245, 248, 250);
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        showHome();
     }
 
-    private TextView text(String value, float size, int color, boolean bold) {
+    private TextView text(String value, int size, int color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(value);
         t.setTextSize(size);
         t.setTextColor(color);
         t.setGravity(Gravity.CENTER);
-        t.setPadding(dp(12), dp(10), dp(12), dp(10));
+        t.setPadding(16, 16, 16, 16);
 
         if (bold) {
             t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -40,104 +47,176 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(title);
         b.setTextSize(16);
+        b.setTextColor(Color.WHITE);
         b.setAllCaps(false);
-        b.setMinHeight(dp(55));
-        b.setPadding(dp(10), dp(8), dp(10), dp(8));
+        b.setBackgroundColor(blue);
 
         LinearLayout.LayoutParams p =
                 new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
+                        58
                 );
 
-        p.setMargins(dp(16), dp(6), dp(16), dp(6));
+        p.setMargins(20, 8, 20, 8);
         b.setLayoutParams(p);
 
         return b;
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    private LinearLayout baseLayout() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setBackgroundColor(light);
+        layout.setPadding(0, 20, 0, 20);
+        return layout;
+    }
 
-        getWindow().setStatusBarColor(Color.rgb(10, 45, 70));
+    private void showHome() {
 
-        ScrollView scroll = new ScrollView(this);
-
-        LinearLayout main = new LinearLayout(this);
-        main.setOrientation(LinearLayout.VERTICAL);
-        main.setBackgroundColor(Color.rgb(245, 248, 250));
-        main.setPadding(0, dp(18), 0, dp(25));
+        LinearLayout layout = baseLayout();
 
         TextView title = text(
                 "MEZAN EXECUTIVE TOWER",
-                24,
-                Color.WHITE,
+                25,
+                blue,
                 true
         );
-        title.setBackgroundColor(Color.rgb(10, 70, 105));
-        title.setPadding(dp(10), dp(24), dp(10), dp(24));
-        main.addView(title);
+        layout.addView(title);
 
         TextView subtitle = text(
                 "ATTENDANCE MANAGEMENT SYSTEM",
-                16,
-                Color.rgb(10, 70, 105),
+                17,
+                dark,
                 true
         );
-        subtitle.setPadding(dp(10), dp(18), dp(10), dp(8));
-        main.addView(subtitle);
+        layout.addView(subtitle);
 
-        String today = new SimpleDateFormat(
+        String date = new SimpleDateFormat(
                 "EEEE, dd MMMM yyyy",
-                Locale.getDefault()
+                Locale.ENGLISH
         ).format(new Date());
 
-        TextView date = text(
-                today,
-                15,
-                Color.DKGRAY,
-                false
+        layout.addView(
+                text(date, 16, Color.DKGRAY, false)
         );
-        main.addView(date);
 
-        TextView status = text(
-                "System Ready",
-                17,
-                Color.rgb(20, 120, 70),
-                true
+        layout.addView(
+                text("SYSTEM READY", 18, Color.rgb(0, 130, 70), true)
         );
-        status.setPadding(dp(10), dp(20), dp(10), dp(15));
-        main.addView(status);
 
-        Button attendance = menuButton("📋  Daily Attendance");
-        main.addView(attendance);
+        Button daily = menuButton("📋 Daily Attendance");
+        Button staff = menuButton("👥 Staff Management");
+        Button leaves = menuButton("📝 Leaves & Short Leaves");
+        Button reports = menuButton("📊 Monthly / Annual Reports");
+        Button holidays = menuButton("📅 Holidays & Sundays");
+        Button admin = menuButton("⚙ Admin Dashboard");
 
-        Button staff = menuButton("👥  Staff Management");
-        main.addView(staff);
+        layout.addView(daily);
+        layout.addView(staff);
+        layout.addView(leaves);
+        layout.addView(reports);
+        layout.addView(holidays);
+        layout.addView(admin);
 
-        Button leaves = menuButton("📝  Leaves & Short Leaves");
-        main.addView(leaves);
-
-        Button reports = menuButton("📊  Monthly / Annual Reports");
-        main.addView(reports);
-
-        Button holidays = menuButton("📅  Holidays & Sundays");
-        main.addView(holidays);
-
-        Button admin = menuButton("⚙️  Admin Dashboard");
-        main.addView(admin);
+        daily.setOnClickListener(v -> showDailyAttendance());
+        staff.setOnClickListener(v -> showMessage("Staff Management"));
+        leaves.setOnClickListener(v -> showMessage("Leaves & Short Leaves"));
+        reports.setOnClickListener(v -> showMessage("Monthly / Annual Reports"));
+        holidays.setOnClickListener(v -> showMessage("Holidays & Sundays"));
+        admin.setOnClickListener(v -> showMessage("Admin Dashboard"));
 
         TextView footer = text(
-                "MEZAN ATTENDANCE APP - NATIVE BUILD 14",
+                "MEZAN ATTENDANCE APP",
                 13,
                 Color.GRAY,
+                false
+        );
+
+        LinearLayout.LayoutParams fp =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+        fp.setMargins(0, 25, 0, 0);
+        footer.setLayoutParams(fp);
+
+        layout.addView(footer);
+
+        setContentView(layout);
+    }
+
+    private void showDailyAttendance() {
+
+        LinearLayout layout = baseLayout();
+
+        TextView heading = text(
+                "DAILY ATTENDANCE",
+                24,
+                blue,
                 true
         );
-        footer.setPadding(dp(10), dp(30), dp(10), dp(5));
-        main.addView(footer);
+        layout.addView(heading);
 
-        scroll.addView(main);
+        String date = new SimpleDateFormat(
+                "dd MMMM yyyy",
+                Locale.ENGLISH
+        ).format(new Date());
+
+        layout.addView(
+                text("Date: " + date, 17, dark, true)
+        );
+
+        layout.addView(
+                text(
+                        "Staff attendance will be recorded here.",
+                        16,
+                        Color.DKGRAY,
+                        false
+                )
+        );
+
+        String[] options = {
+                "✅ Present",
+                "❌ Absent",
+                "📝 Leave",
+                "⏱ Short Leave",
+                "📷 Selfie Attendance",
+                "📍 Location Verification"
+        };
+
+        for (String option : options) {
+            Button b = menuButton(option);
+
+            b.setOnClickListener(v ->
+                    Toast.makeText(
+                            MainActivity.this,
+                            option + " — Module Ready",
+                            Toast.LENGTH_SHORT
+                    ).show()
+            );
+
+            layout.addView(b);
+        }
+
+        Button back = menuButton("← Back to Home");
+
+        back.setOnClickListener(v -> showHome());
+
+        layout.addView(back);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(layout);
+
         setContentView(scroll);
     }
-          }
+
+    private void showMessage(String title) {
+
+        Toast.makeText(
+                this,
+                title + " — اگلے مرحلے میں تیار کیا جائے گا",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+}
